@@ -10,6 +10,8 @@ An MCP (Model Context Protocol) server that wraps [ngspice](https://ngspice.sour
 - Sweep any circuit parameter across a range with parallel execution
 - List and filter past simulation runs
 - Reference data for all standard SPICE components
+- **21 built-in circuit templates** — filters, amplifiers, MOSFET, op-amp stages, SMPS converters
+- **External model library support** — save `.lib` files and reference them in any netlist
 
 ## Requirements
 
@@ -51,27 +53,6 @@ The UWP container intercepts filesystem calls. When Claude Desktop tries to acce
   }
 }
 ```
-## Create Folders
-in your mcp-ngspice create folders:
-circuits/
-results/
-
-Example:
-mkdir -p D:/Development_Soft/mcp_ngspice/circuits
-mkdir -p D:/Development_Soft/mcp_ngspice/results
-
-The server expects these folders to already exist — it writes netlists to circuits/ and simulation output to results/. Once the cwd is correctly set and the folders exist, the simulation will run.
-
-The real issue is that the cwd field in Claude Desktop's MCP config is not always passed to the Node.js process on Windows. The server starts from system32 regardless. This is a known Windows-specific behavior with how Claude Desktop spawns subprocesses.
-The most robust solution is to make the server resolve its own working directory from the script's location, instead of relying on cwd. Do this in Claude Code CLI:
-```
-cd D:/Development_Soft/mcp_ngspice
-claude
-
-Then tell Claude Code:
-
-"In src/utils/ngspice.ts, the server is trying to create circuits/ and results/ directories relative to process.cwd(), but on Windows Claude Desktop launches the process from system32 instead of the project root. Fix this by resolving the project root from import.meta.url instead of process.cwd(). The project root should be two levels up from src/utils/ngspice.ts — use fileURLToPath and path.resolve to get the absolute path, then use that as the base for all circuits/ and results/ directory operations. Also ensure both directories are created automatically on startup if they don't exist."
-```
 
 Restart Claude Desktop after saving the config.
 
@@ -85,8 +66,41 @@ Restart Claude Desktop after saving the config.
 | `sweep_parameters` | Run multiple simulations varying one parameter over a range |
 | `list_simulations` | List past simulation runs with filtering and sorting |
 | `get_component_info` | SPICE syntax reference for R, C, L, V, I, D, Q, M, X |
+| `list_templates` | List all 21 built-in circuit templates with metadata |
+| `get_template` | Retrieve a ready-to-run netlist for a named template |
+| `save_lib_file` | Save a SPICE model `.lib` file to the local models directory |
+| `list_lib_files` | List saved model library files |
+| `delete_lib_file` | Delete a model library file |
 
 See [USER_GUIDE.md](USER_GUIDE.md) for detailed usage examples.
+
+## Example: RC Low-Pass Filter Simulation
+
+Ask Claude: **"Simulate the RC low-pass filter"**
+
+Claude calls `get_template("rc-lowpass")` to retrieve the netlist (R1 = 1 kΩ, C1 = 100 nF, f_c ≈ 1592 Hz), then runs `run_simulation` and `parse_results` to extract the waveform data.
+
+### Frequency Response (Bode Plot)
+
+The AC analysis sweeps 10 Hz – 100 kHz. The output rolls off at −20 dB/decade above the cutoff frequency, exactly as predicted by theory.
+
+![RC Low-Pass Filter — Frequency Response](docs/images/rc_lowpass_bode.png)
+
+### Transient Step Response
+
+The transient analysis drives the filter with a 1 kHz square wave. V(out) charges and discharges with the RC time constant τ = R·C = 100 µs, smoothing the sharp edges of the input.
+
+![RC Low-Pass Filter — Transient Step Response](docs/images/rc_lowpass_transient.png)
+
+| Parameter | Value |
+|-----------|-------|
+| R1 | 1 kΩ |
+| C1 | 100 nF |
+| Cutoff frequency f_c | 1592 Hz |
+| Time constant τ | 100 µs |
+| Roll-off | −20 dB/decade |
+| Simulation points (AC) | 81 |
+| Simulation points (Transient) | 725 |
 
 ## Development
 
