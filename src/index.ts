@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { CreateNetlistSchema, createNetlist } from "./tools/createNetlist.js";
@@ -7,6 +7,8 @@ import { GetComponentInfoSchema, getComponentInfo } from "./tools/getComponentIn
 import { ParseResultsSchema, parseResults } from "./tools/parseResults.js";
 import { SweepParametersSchema, sweepParameters } from "./tools/sweepParameters.js";
 import { ListSimulationsSchema, listSimulations } from "./tools/listSimulations.js";
+import { TEMPLATES, getTemplate, listTemplates } from "./templates/circuits.js";
+import { z } from "zod";
 
 const server = new McpServer({
   name: "mcp-ngspice",
@@ -88,6 +90,85 @@ server.tool(
     const info = getComponentInfo(input as Parameters<typeof getComponentInfo>[0]);
     return {
       content: [{ type: "text", text: JSON.stringify(info, null, 2) }],
+    };
+  }
+);
+
+// ── Netlist template resource: netlist://templates/{name} ──────
+
+server.resource(
+  "netlist-templates",
+  new ResourceTemplate("netlist://templates/{name}", {
+    list: async () => ({
+      resources: TEMPLATES.map((t) => ({
+        uri:         `netlist://templates/${t.name}`,
+        name:        t.title,
+        description: t.description,
+        mimeType:    "text/plain",
+      })),
+    }),
+  }),
+  async (uri, { name }) => {
+    const tpl = getTemplate(String(name));
+    if (!tpl) {
+      return {
+        contents: [{
+          uri:      uri.href,
+          mimeType: "text/plain",
+          text:     `Template '${name}' not found. Call list_templates to see available names.`,
+        }],
+      };
+    }
+    return {
+      contents: [{
+        uri:      uri.href,
+        mimeType: "text/plain",
+        text:     tpl.netlist,
+      }],
+    };
+  }
+);
+
+// ── Template tools ────────────────────────────────────────────
+
+server.tool(
+  "list_templates",
+  "List all built-in circuit netlist templates (RC/RL filters, RLC, voltage divider, rectifiers, BJT amplifier, op-amp stages, Zener regulator). Returns name, title, description, category, and adjustable parameters for each.",
+  {},
+  async () => ({
+    content: [{ type: "text", text: JSON.stringify(listTemplates(), null, 2) }],
+  })
+);
+
+server.tool(
+  "get_template",
+  "Retrieve a ready-to-run SPICE netlist for a named circuit template. Use list_templates first to discover available names.",
+  {
+    name: z.string().describe("Template name, e.g. 'rc-lowpass', 'common-emitter', 'full-wave-bridge'"),
+  },
+  async ({ name }) => {
+    const tpl = getTemplate(String(name));
+    if (!tpl) {
+      const names = TEMPLATES.map((t) => t.name).join(", ");
+      return {
+        content: [{
+          type: "text",
+          text: `Template '${name}' not found. Available templates: ${names}`,
+        }],
+      };
+    }
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          name:        tpl.name,
+          title:       tpl.title,
+          description: tpl.description,
+          category:    tpl.category,
+          parameters:  tpl.parameters,
+          netlist:     tpl.netlist,
+        }, null, 2),
+      }],
     };
   }
 );
