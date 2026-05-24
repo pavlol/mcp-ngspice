@@ -30,14 +30,15 @@ MCP Server (Node.js/TypeScript)
     │   ├── parse_results(simulation_id)
     │   ├── sweep_parameters(netlist, parameter, range)
     │   ├── list_simulations()
-    │   └── get_component_info(component_type)
+    │   ├── get_component_info(component_type)
+    │   ├── list_templates()
+    │   └── get_template(name)
     │
     ├── Resources:
-    │   ├── simulation://results/{id}
     │   └── netlist://templates/{name}
     │
     └── Subprocess calls to ngspice CLI
-         └── ngspice -b circuit.cir → .raw + .log output
+         └── ngspice_con.exe -b -o results/<id>.log -r results/<id>.raw circuits/<id>.cir
 ```
 
 ## Implementation Plan
@@ -114,32 +115,35 @@ Q1 4 3 0 2N3904      ; BJT transistor
 - Node 0 = Ground (always)
 - Nodes can be numbers (1, 2, 3) or names (Vout, In, Bias)
 
-## File Structure Target
+## File Structure
 ```
 mcp_ngspice/
-├── CLAUDE.md              # This file
+├── CLAUDE.md              # This file (project context for Claude Code)
+├── USER_GUIDE.md          # End-user guide with examples
+├── README.md              # Public-facing readme (committed)
+├── ARCHITECTURE.md        # Technical reference (.gitignored, local only)
 ├── package.json
 ├── tsconfig.json
 ├── src/
-│   ├── index.ts           # MCP server entry point
+│   ├── index.ts           # MCP server entry point — registers all tools + resource
 │   ├── tools/
 │   │   ├── createNetlist.ts
 │   │   ├── runSimulation.ts
 │   │   ├── parseResults.ts
 │   │   ├── sweepParameters.ts
+│   │   ├── listSimulations.ts
 │   │   └── getComponentInfo.ts
 │   ├── parsers/
 │   │   ├── logParser.ts    # Parse .log output
-│   │   └── rawParser.ts    # Parse .raw binary waveform data
+│   │   └── rawParser.ts    # Parse .raw waveform data (ASCII + binary)
 │   ├── templates/
-│   │   └── circuits.ts     # Pre-built circuit templates
+│   │   └── circuits.ts     # 11 pre-built circuit templates
 │   └── utils/
 │       ├── ngspice.ts      # ngspice subprocess wrapper
 │       └── validation.ts   # Netlist validation
-├── circuits/               # Working directory for .cir files
-├── results/                # Simulation output storage
-├── examples/               # Example usage
-└── README.md
+├── circuits/               # Working directory for .cir files (gitignored)
+├── results/                # Simulation output storage (gitignored)
+└── dist/                   # Compiled JS output (gitignored)
 ```
 
 ## Style & Conventions
@@ -151,14 +155,27 @@ mcp_ngspice/
 - Use `zod` for input validation on tool parameters
 
 ## Current Status
-- [ ] ngspice not yet installed on Windows
-- [ ] Project directory created: mcp_ngspice/
-- [ ] Claude Code CLI running in project directory
-- [ ] Phase 1 implementation not started
 
-## Next Steps
-1. Install ngspice on Windows (download from https://ngspice.sourceforge.io/)
-2. Verify ngspice works: `ngspice --version`
-3. Initialize npm project: `npm init -y`
-4. Install dependencies: MCP SDK, TypeScript, zod
-5. Create src/index.ts with basic MCP server skeleton
+### Completed
+- [x] ngspice 46 installed at `C:\Spice64\bin\ngspice_con.exe`
+- [x] Phase 1: project init, MCP server skeleton, `create_netlist`, `run_simulation`, log parser
+- [x] Phase 2: `.raw` parser (ASCII + binary), `parse_results`, `sweep_parameters`, `list_simulations`, `get_component_info`
+- [x] Netlist templates: 11 circuits across 5 categories, MCP Resource + `list_templates` / `get_template` tools
+- [x] Registered in Claude Desktop (`claude_desktop_config.json`)
+- [x] README.md and USER_GUIDE.md written and committed
+- [x] Git repo initialized, pushed to https://github.com/pavlol/mcp-ngspice
+
+### Phase 3 remaining
+- [ ] `.lib` model file support (`X` subcircuit includes)
+- [ ] npm package publishing
+- [ ] More circuit templates (MOSFET, switched-mode power supply, etc.)
+
+## Development Workflow
+
+Before every `git commit` + `git push`, update these three documentation files to reflect the changes made:
+
+- **`ARCHITECTURE.md`** — local only (in `.gitignore`). Update system diagram, tool execution flows, and any new modules or data formats. Do not stage or commit this file.
+- **`CLAUDE.md`** — committed. Update the Architecture section (tools list), File Structure, and Current Status. Stage and commit alongside the feature code.
+- **`USER_GUIDE.md`** — committed. Add parameter tables and usage examples for any new or changed tools. Stage and commit alongside the feature code.
+
+Sequence: implement → update docs → `git add CLAUDE.md USER_GUIDE.md <feature files>` → commit → push.

@@ -13,7 +13,9 @@ A practical guide to using the ngspice MCP server with Claude. Each section show
 5. [sweep_parameters](#sweep_parameters)
 6. [list_simulations](#list_simulations)
 7. [get_component_info](#get_component_info)
-8. [End-to-End Workflows](#end-to-end-workflows)
+8. [list_templates](#list_templates)
+9. [get_template](#get_template)
+10. [End-to-End Workflows](#end-to-end-workflows)
 
 ---
 
@@ -354,6 +356,113 @@ Response:
 
 ---
 
+## list_templates
+
+Lists all built-in circuit netlist templates without returning the full netlist text. Use this to discover available template names before calling `get_template`.
+
+**Parameters:** none
+
+**Example**
+
+> "What circuit templates are available?"
+
+```
+list_templates()
+```
+
+Response excerpt:
+```json
+[
+  {
+    "name": "rc-lowpass",
+    "title": "RC Low-Pass Filter",
+    "description": "First-order RC low-pass filter with AC frequency sweep and transient step response.",
+    "category": "filter",
+    "parameters": [
+      { "name": "R1", "description": "Series resistance — sets cutoff frequency with C1", "defaultValue": "1k", "unit": "Ω" },
+      { "name": "C1", "description": "Shunt capacitance — sets cutoff frequency with R1", "defaultValue": "100n", "unit": "F" }
+    ]
+  },
+  {
+    "name": "common-emitter",
+    "title": "BJT Common-Emitter Amplifier",
+    "category": "amplifier",
+    ...
+  },
+  ...
+]
+```
+
+Available templates by category:
+
+| Category | Names |
+|----------|-------|
+| filter | `rc-lowpass`, `rc-highpass`, `rl-lowpass`, `series-rlc` |
+| passive | `voltage-divider` |
+| rectifier | `half-wave-rectifier`, `full-wave-bridge` |
+| amplifier | `common-emitter` |
+| opamp | `inverting-amplifier`, `non-inverting-amplifier` |
+| power | `zener-regulator` |
+
+---
+
+## get_template
+
+Retrieves the full SPICE netlist for a named template. The returned netlist is ready to pass directly to `run_simulation`.
+
+**Parameters**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `name` | yes | Template slug from `list_templates`, e.g. `"rc-lowpass"` |
+
+**Example — get and run a filter template**
+
+> "Give me the RC low-pass filter template and simulate it."
+
+```
+get_template({ name: "rc-lowpass" })
+```
+
+Response:
+```json
+{
+  "name": "rc-lowpass",
+  "title": "RC Low-Pass Filter",
+  "description": "First-order RC low-pass filter with AC frequency sweep and transient step response.",
+  "category": "filter",
+  "parameters": [...],
+  "netlist": "RC Low-Pass Filter\n* fc = 1 / (2*pi*R1*C1) = 1592 Hz with defaults\n..."
+}
+```
+
+Pass the `netlist` field directly to `run_simulation`:
+
+```
+run_simulation({ netlist: <template.netlist> })
+```
+
+**Example — modify a template before running**
+
+Get the template, edit one value in the netlist string, then simulate:
+
+> "Use the common-emitter template but change Rc to 10kΩ."
+
+1. `get_template({ name: "common-emitter" })` — retrieve netlist
+2. Replace `Rc vcc col 4.7k` with `Rc vcc col 10k` in the returned netlist string
+3. `run_simulation({ netlist: modifiedNetlist })`
+4. `parse_results({ simulation_id: ... })` — inspect new operating point
+
+**Example — sweep a template parameter**
+
+> "Use the RC low-pass template and sweep C1 from 10nF to 1µF to see how the cutoff shifts."
+
+1. `get_template({ name: "rc-lowpass" })` — get base netlist
+2. Replace the literal `100n` with `{CVAL}` in the netlist
+3. Call `sweep_parameters` with `token: "CVAL"`, `start: 10e-9`, `stop: 1e-6`, `steps: 10`, `scale: "log"`
+
+---
+
 ## End-to-End Workflows
 
 ### Workflow 1: Design a low-pass filter for audio
@@ -406,7 +515,18 @@ Look at `table.variables["v(3)"].last` to find the R_base that gives v(collector
 
 ---
 
-### Workflow 3: Iterate on a design
+### Workflow 3: Start from a template
+
+> "Simulate the full-wave bridge rectifier template and tell me the DC output voltage and ripple."
+
+1. `list_templates()` — confirm `full-wave-bridge` exists
+2. `get_template({ name: "full-wave-bridge" })` — retrieve the ready-to-run netlist
+3. `run_simulation({ netlist: ... })` — simulate; get `simulationId`
+4. `parse_results({ simulation_id: ..., include_data: false })` — check `summary` for `v(vout)` min/max → ripple = max − min
+
+---
+
+### Workflow 4: Iterate on a design
 
 1. Run initial simulation → `list_simulations` to confirm it's saved
 2. `parse_results` to inspect waveforms
