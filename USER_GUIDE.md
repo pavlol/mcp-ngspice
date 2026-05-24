@@ -15,7 +15,10 @@ A practical guide to using the ngspice MCP server with Claude. Each section show
 7. [get_component_info](#get_component_info)
 8. [list_templates](#list_templates)
 9. [get_template](#get_template)
-10. [End-to-End Workflows](#end-to-end-workflows)
+10. [save_lib_file](#save_lib_file)
+11. [list_lib_files](#list_lib_files)
+12. [delete_lib_file](#delete_lib_file)
+13. [End-to-End Workflows](#end-to-end-workflows)
 
 ---
 
@@ -463,6 +466,104 @@ Get the template, edit one value in the netlist string, then simulate:
 
 ---
 
+## save_lib_file
+
+Saves a SPICE model library file to the local `models/` directory. Once saved, any netlist can reference the model with `.lib filename.lib` or `.include filename.lib` — the server resolves relative paths to the models directory automatically at simulation time.
+
+> **Note:** ngspice uses `.include` internally. The server transparently rewrites `.lib` directives to `.include` so you can write either form in your netlists.
+
+**Parameters**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `name` | yes | File name, e.g. `"bc547.lib"`. A `.lib` extension is added if omitted. |
+| `content` | yes | Full text content of the model file |
+
+**Example — save a transistor model**
+
+> "Save this BC547 model so I can use it in netlists without defining it inline."
+
+```
+save_lib_file({
+  name: "bc547.lib",
+  content: `.MODEL BC547 NPN(Is=10f Bf=200 Vaf=80 Rb=100 Rc=1
++ Cjc=5p Cje=12p Tf=300p Tr=30n)`
+})
+```
+
+Response:
+```json
+{
+  "path": "D:\\...\\models\\bc547.lib",
+  "sizeBytes": 87
+}
+```
+
+After saving, reference it in any netlist:
+```spice
+BJT stage with BC547
+.lib bc547.lib
+Vcc vcc 0 DC 12
+Q1 col base 0 BC547
+Rc vcc col 4.7k
+Rb vcc base 100k
+.op
+.end
+```
+
+---
+
+## list_lib_files
+
+Lists all `.lib` model files saved in the local models directory.
+
+**Parameters:** none
+
+**Example**
+
+> "What model files do I have available?"
+
+```
+list_lib_files()
+```
+
+Response:
+```json
+{
+  "modelsDir": "D:\\...\\models",
+  "count": 2,
+  "files": [
+    { "name": "bc547.lib",  "sizeBytes": 87,  "modifiedAt": "2026-05-24T11:00:00.000Z" },
+    { "name": "lm741.lib",  "sizeBytes": 312, "modifiedAt": "2026-05-24T11:05:00.000Z" }
+  ]
+}
+```
+
+---
+
+## delete_lib_file
+
+Deletes a model file from the local models directory.
+
+**Parameters**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `name` | yes | File name to delete, e.g. `"bc547.lib"` |
+
+**Example**
+
+```
+delete_lib_file({ name: "bc547.lib" })
+```
+
+Response:
+```json
+{ "deleted": "D:\\...\\models\\bc547.lib" }
+```
+
+---
+
 ## End-to-End Workflows
 
 ### Workflow 1: Design a low-pass filter for audio
@@ -526,7 +627,20 @@ Look at `table.variables["v(3)"].last` to find the R_base that gives v(collector
 
 ---
 
-### Workflow 4: Iterate on a design
+### Workflow 4: Use an external model library
+
+> "I have a manufacturer SPICE model for the BC547. Save it and simulate a common-emitter stage."
+
+1. `save_lib_file({ name: "bc547.lib", content: "<model text>" })` — store it once
+2. Write a netlist that references `.lib bc547.lib` (no inline `.MODEL` needed)
+3. `run_simulation({ netlist: ... })` — path resolved automatically
+4. `parse_results(...)` — inspect operating point
+
+When you no longer need the model: `delete_lib_file({ name: "bc547.lib" })`.
+
+---
+
+### Workflow 5: Iterate on a design
 
 1. Run initial simulation → `list_simulations` to confirm it's saved
 2. `parse_results` to inspect waveforms

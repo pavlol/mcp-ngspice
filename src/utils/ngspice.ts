@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { resolveLibPaths } from "./libResolver.js";
 
 export interface SimulationResult {
   id: string;
@@ -30,7 +31,8 @@ export async function runNgspice(
   const logPath = path.join(RESULTS_DIR, `${id}.log`);
   const rawPath = path.join(RESULTS_DIR, `${id}.raw`);
 
-  await fs.writeFile(netlistPath, netlistContent, "utf8");
+  const resolvedContent = await resolveLibPaths(netlistContent);
+  await fs.writeFile(netlistPath, resolvedContent, "utf8");
 
   return new Promise((resolve) => {
     // -b batch mode, -o log output, -r raw output

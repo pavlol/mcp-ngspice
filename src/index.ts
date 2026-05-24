@@ -8,6 +8,9 @@ import { ParseResultsSchema, parseResults } from "./tools/parseResults.js";
 import { SweepParametersSchema, sweepParameters } from "./tools/sweepParameters.js";
 import { ListSimulationsSchema, listSimulations } from "./tools/listSimulations.js";
 import { TEMPLATES, getTemplate, listTemplates } from "./templates/circuits.js";
+import { SaveLibFileSchema, saveLibFile } from "./tools/saveLibFile.js";
+import { listLibFiles } from "./tools/listLibFiles.js";
+import { DeleteLibFileSchema, deleteLibFile } from "./tools/deleteLibFile.js";
 import { z } from "zod";
 
 const server = new McpServer({
@@ -90,6 +93,46 @@ server.tool(
     const info = getComponentInfo(input as Parameters<typeof getComponentInfo>[0]);
     return {
       content: [{ type: "text", text: JSON.stringify(info, null, 2) }],
+    };
+  }
+);
+
+// ── Model library file tools ──────────────────────────────────
+
+server.tool(
+  "save_lib_file",
+  "Save a SPICE model library (.lib) file to the local models directory. " +
+  "The file is then available for any netlist to reference with .lib or .include directives — " +
+  "paths are resolved automatically at simulation time.",
+  SaveLibFileSchema.shape,
+  async (input) => {
+    const result = await saveLibFile(input as Parameters<typeof saveLibFile>[0]);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
+server.tool(
+  "list_lib_files",
+  "List all SPICE model library files saved in the local models directory.",
+  {},
+  async () => {
+    const result = await listLibFiles();
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
+server.tool(
+  "delete_lib_file",
+  "Delete a SPICE model library file from the local models directory.",
+  DeleteLibFileSchema.shape,
+  async (input) => {
+    const result = await deleteLibFile(input as Parameters<typeof deleteLibFile>[0]);
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
   }
 );
