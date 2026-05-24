@@ -406,7 +406,7 @@ Available templates by category:
 | amplifier | `common-emitter` |
 | mosfet | `nmos-common-source`, `nmos-source-follower`, `cmos-inverter` |
 | opamp | `inverting-amplifier`, `non-inverting-amplifier`, `voltage-follower`, `summing-amplifier`, `integrator`, `differentiator` |
-| power | `zener-regulator` |
+| power | `zener-regulator`, `buck-converter`, `boost-converter` |
 
 ---
 
@@ -617,7 +617,33 @@ Look at `table.variables["v(3)"].last` to find the R_base that gives v(collector
 
 ---
 
-### Workflow 3: MOSFET common-source amplifier
+### Workflow 3: Buck converter — sweep duty cycle for target output voltage
+
+> "I need a 3.3 V rail from a 12 V supply. Find the duty cycle."
+
+`Vout = Vin × D` (ideal), so D = 3.3/12 = 0.275 → pulse width = 2.75 µs.
+
+1. `get_template({ name: "buck-converter" })` — get base netlist
+2. Replace `4.2u` (the pulse width in `Vpwm`) with `2.75u`
+3. `run_simulation({ netlist: ... })` (allow up to 30 s)
+4. `parse_results({ simulation_id: ..., include_data: false })` — read `v(out)` min/max; ripple = max − min
+
+Or use `sweep_parameters` to sweep the pulse width directly:
+
+```
+sweep_parameters({
+  netlist: <template with PULSE(0 12 0 10n 10n {PW} 10u)>,
+  token: "PW",
+  start: 1e-6,
+  stop: 9e-6,
+  steps: 9,
+  scale: "linear"
+})
+```
+
+---
+
+### Workflow 4: MOSFET common-source amplifier
 
 > "Set up an N-channel MOSFET common-source amplifier and find the AC gain."
 
@@ -634,7 +660,7 @@ replacing `3.3k` with `{Rd}` in the netlist.
 
 ---
 
-### Workflow 4: CMOS inverter switching characteristics
+### Workflow 5: CMOS inverter switching characteristics
 
 > "Show me the DC transfer curve and propagation delay of the CMOS inverter."
 
@@ -650,7 +676,7 @@ Add `.meas` statements to quantify:
 
 ---
 
-### Workflow 5: Sallen-Key filter design
+### Workflow 6: Sallen-Key filter design
 
 > "Design a 2nd-order Butterworth low-pass filter with a 5 kHz cutoff."
 
@@ -661,7 +687,7 @@ Add `.meas` statements to quantify:
 
 ---
 
-### Workflow 6: Start from a template
+### Workflow 7: Start from a template
 
 > "Simulate the full-wave bridge rectifier template and tell me the DC output voltage and ripple."
 
@@ -672,7 +698,7 @@ Add `.meas` statements to quantify:
 
 ---
 
-### Workflow 7: Use an external model library
+### Workflow 8: Use an external model library
 
 > "I have a manufacturer SPICE model for the BC547. Save it and simulate a common-emitter stage."
 
@@ -685,7 +711,7 @@ When you no longer need the model: `delete_lib_file({ name: "bc547.lib" })`.
 
 ---
 
-### Workflow 8: Iterate on a design
+### Workflow 9: Iterate on a design
 
 1. Run initial simulation → `list_simulations` to confirm it's saved
 2. `parse_results` to inspect waveforms

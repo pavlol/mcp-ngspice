@@ -355,6 +355,99 @@ Rload 2 0 1k
 `,
   },
 
+  // ── Switched-mode power supplies ─────────────────────────────
+
+  {
+    name: "buck-converter",
+    title: "Buck Converter (Step-Down SMPS)",
+    description: "Synchronous buck converter: Vout = Vin × D. Voltage-controlled switch, freewheeling diode, LC output filter. 100 kHz switching.",
+    category: "power",
+    parameters: [
+      { name: "D",     description: "Duty cycle: edit Vpwm pulse-width pw = D × 10µs (e.g. 4.2µs → D=0.42 → Vout≈5V)", defaultValue: "4.2u", unit: "s (pulse width)" },
+      { name: "Vin",   description: "Input supply voltage",        defaultValue: "12",   unit: "V" },
+      { name: "L1",    description: "Output filter inductor",      defaultValue: "100u", unit: "H" },
+      { name: "C1",    description: "Output filter capacitor",     defaultValue: "100u", unit: "F" },
+      { name: "Rload", description: "Load resistance",             defaultValue: "10",   unit: "Ω" },
+    ],
+    netlist: `Buck Converter (Step-Down SMPS)
+* Vin=12V, D=42% → Vout≈5V, fsw=100kHz
+* Vout = Vin * D  (ideal); losses reduce Vout slightly
+* Adjust duty cycle by changing Vpwm pulse width: pw = D * 10us
+*
+* IC values start near steady state for faster convergence.
+* Use parse_results to read v(out) min/max/last — ripple = max - min.
+
+.model SW_IDEAL SW(Ron=10m Roff=10Meg Vt=6 Vh=0)
+.model DFWD D(Is=10n Rs=0.02 N=1.05 Tt=10n CJO=50p)
+
+Vin 1 0 DC 12
+
+* PWM drive: period=10µs (100kHz), pulse width=4.2µs (D≈42%)
+Vpwm gate 0 PULSE(0 12 0 10n 10n 4.2u 10u)
+
+* High-side switch: closes when V(gate) > 6V
+S1 1 sw gate 0 SW_IDEAL
+
+* Freewheeling diode: conducts when switch is open
+D1 0 sw DFWD
+
+* Output LC filter with small inductor ESR
+L1   sw  lx  100u IC=0.5
+Resr lx  out 0.1
+C1   out 0   100u IC=5
+
+Rload out 0 10
+
+.tran 100n 2m UIC
+.end
+`,
+  },
+
+  {
+    name: "boost-converter",
+    title: "Boost Converter (Step-Up SMPS)",
+    description: "Boost converter: Vout = Vin / (1−D). Low-side switch charges inductor; diode transfers energy to output cap. 100 kHz switching.",
+    category: "power",
+    parameters: [
+      { name: "D",     description: "Duty cycle: edit Vpwm pulse-width pw = D × 10µs (e.g. 5.8µs → D=0.58 → Vout≈12V)", defaultValue: "5.8u", unit: "s (pulse width)" },
+      { name: "Vin",   description: "Input supply voltage",        defaultValue: "5",    unit: "V" },
+      { name: "L1",    description: "Energy-storage inductor",     defaultValue: "100u", unit: "H" },
+      { name: "C1",    description: "Output filter capacitor",     defaultValue: "100u", unit: "F" },
+      { name: "Rload", description: "Load resistance",             defaultValue: "20",   unit: "Ω" },
+    ],
+    netlist: `Boost Converter (Step-Up SMPS)
+* Vin=5V, D=58% → Vout≈12V, fsw=100kHz
+* Vout = Vin / (1 - D)  (ideal); diode drop reduces Vout slightly
+* Adjust duty cycle by changing Vpwm pulse width: pw = D * 10us
+*
+* IC values start near steady state for faster convergence.
+* Use parse_results to read v(out) min/max — ripple = max - min.
+
+.model SW_IDEAL SW(Ron=10m Roff=10Meg Vt=2.5 Vh=0)
+.model DFWD D(Is=10n Rs=0.02 N=1.05 Tt=10n CJO=50p)
+
+Vin 1 0 DC 5
+
+* PWM drive: period=10µs (100kHz), pulse width=5.8µs (D≈58%)
+Vpwm gate 0 PULSE(0 5 0 10n 10n 5.8u 10u)
+
+* Low-side switch: closes when V(gate) > 2.5V, charges L1
+S1 sw 0 gate 0 SW_IDEAL
+
+* Inductor stores energy when S1 closed, releases when S1 opens
+L1 1 sw 100u IC=1.4
+
+* Output diode and filter cap
+D1  sw  out DFWD
+C1  out 0   100u IC=12
+
+Rload out 0 20
+
+.tran 100n 2m UIC
+.end
+`,
+  },
+
   // ── MOSFET circuits ──────────────────────────────────────────
 
   {
