@@ -400,11 +400,12 @@ Available templates by category:
 
 | Category | Names |
 |----------|-------|
-| filter | `rc-lowpass`, `rc-highpass`, `rl-lowpass`, `series-rlc` |
+| filter | `rc-lowpass`, `rc-highpass`, `rl-lowpass`, `series-rlc`, `sallen-key-lowpass` |
 | passive | `voltage-divider` |
 | rectifier | `half-wave-rectifier`, `full-wave-bridge` |
 | amplifier | `common-emitter` |
-| opamp | `inverting-amplifier`, `non-inverting-amplifier` |
+| mosfet | `nmos-common-source`, `nmos-source-follower`, `cmos-inverter` |
+| opamp | `inverting-amplifier`, `non-inverting-amplifier`, `voltage-follower`, `summing-amplifier`, `integrator`, `differentiator` |
 | power | `zener-regulator` |
 
 ---
@@ -616,7 +617,51 @@ Look at `table.variables["v(3)"].last` to find the R_base that gives v(collector
 
 ---
 
-### Workflow 3: Start from a template
+### Workflow 3: MOSFET common-source amplifier
+
+> "Set up an N-channel MOSFET common-source amplifier and find the AC gain."
+
+1. `get_template({ name: "nmos-common-source" })` — retrieve the 2N7000 CS amplifier netlist
+2. `run_simulation({ netlist: ... })` — simulate `.op`, `.ac`, and `.tran`
+3. `parse_results({ simulation_id: ..., include_data: false })` — check `.op` results for drain voltage (bias point)
+4. `parse_results({ simulation_id: ..., include_data: true })` — check `ac.v(out).magnitudeDb` for midband gain
+
+To sweep Rd and observe gain vs. operating point:
+```
+sweep_parameters({ token: "Rd", start: 1000, stop: 10000, steps: 10 })
+```
+replacing `3.3k` with `{Rd}` in the netlist.
+
+---
+
+### Workflow 4: CMOS inverter switching characteristics
+
+> "Show me the DC transfer curve and propagation delay of the CMOS inverter."
+
+1. `get_template({ name: "cmos-inverter" })` — includes both `.dc` sweep and `.tran` analysis
+2. `run_simulation({ netlist: ... })`
+3. `parse_results(...)` — the DC plot gives the transfer characteristic (input vs. output voltage); the transient plot shows rise/fall times
+
+Add `.meas` statements to quantify:
+```spice
+.meas tran tphl TRIG v(in) VAL=2.5 RISE=1 TARG v(out) VAL=2.5 FALL=1
+.meas tran tplh TRIG v(in) VAL=2.5 FALL=1 TARG v(out) VAL=2.5 RISE=1
+```
+
+---
+
+### Workflow 5: Sallen-Key filter design
+
+> "Design a 2nd-order Butterworth low-pass filter with a 5 kHz cutoff."
+
+1. `get_template({ name: "sallen-key-lowpass" })` — default fc ≈ 1592 Hz
+2. Scale components: fc = 1/(2π·R·C), so for 5 kHz with C=100n: R = 318Ω (use 330Ω)
+3. Edit R1, R2 in the netlist to 330 (keep Rf/Rg ratio for Q=0.707)
+4. `run_simulation(...)` → `parse_results(...)` — verify -3 dB point near 5 kHz in `ac` data
+
+---
+
+### Workflow 6: Start from a template
 
 > "Simulate the full-wave bridge rectifier template and tell me the DC output voltage and ripple."
 
@@ -627,7 +672,7 @@ Look at `table.variables["v(3)"].last` to find the R_base that gives v(collector
 
 ---
 
-### Workflow 4: Use an external model library
+### Workflow 7: Use an external model library
 
 > "I have a manufacturer SPICE model for the BC547. Save it and simulate a common-emitter stage."
 
@@ -640,7 +685,7 @@ When you no longer need the model: `delete_lib_file({ name: "bc547.lib" })`.
 
 ---
 
-### Workflow 5: Iterate on a design
+### Workflow 8: Iterate on a design
 
 1. Run initial simulation → `list_simulations` to confirm it's saved
 2. `parse_results` to inspect waveforms

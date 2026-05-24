@@ -176,7 +176,7 @@ server.resource(
 
 server.tool(
   "list_templates",
-  "List all built-in circuit netlist templates (RC/RL filters, RLC, voltage divider, rectifiers, BJT amplifier, op-amp stages, Zener regulator). Returns name, title, description, category, and adjustable parameters for each.",
+  "List all built-in circuit netlist templates (RC/RL filters, RLC, voltage divider, rectifiers, BJT/MOSFET amplifiers, op-amp stages, CMOS inverter, active filters, Zener regulator). Returns name, title, description, category, and adjustable parameters for each.",
   {},
   async () => ({
     content: [{ type: "text", text: JSON.stringify(listTemplates(), null, 2) }],

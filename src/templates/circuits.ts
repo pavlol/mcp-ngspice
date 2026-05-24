@@ -16,7 +16,7 @@ export interface NetlistTemplate {
   title: string;
   /** One-sentence description */
   description: string;
-  category: "filter" | "amplifier" | "rectifier" | "passive" | "opamp" | "power";
+  category: "filter" | "amplifier" | "rectifier" | "passive" | "opamp" | "power" | "mosfet";
   /** Key adjustable values — use with sweep_parameters by substituting these in the netlist */
   parameters: TemplateParameter[];
   /** Ready-to-run SPICE netlist */
@@ -351,6 +351,278 @@ Rload 2 0 1k
 
 .op
 .dc Vin 0 20 0.1
+.end
+`,
+  },
+
+  // ── MOSFET circuits ──────────────────────────────────────────
+
+  {
+    name: "nmos-common-source",
+    title: "NMOS Common-Source Amplifier",
+    description: "N-channel enhancement MOSFET common-source amplifier with gate-divider bias, source degeneration, and bypass capacitor.",
+    category: "mosfet",
+    parameters: [
+      { name: "Rd", description: "Drain resistor — sets DC operating point and gain", defaultValue: "3.3k", unit: "Ω" },
+      { name: "Rs", description: "Source degeneration resistor", defaultValue: "1k", unit: "Ω" },
+      { name: "R1", description: "Upper gate-bias resistor", defaultValue: "1Meg", unit: "Ω" },
+      { name: "R2", description: "Lower gate-bias resistor — sets Vg with R1", defaultValue: "330k", unit: "Ω" },
+    ],
+    netlist: `NMOS Common-Source Amplifier
+* 2N7000 N-channel enhancement MOSFET, Vto = 2.1V
+* Av ≈ -gm*Rd  (with Cs bypassing Rs)
+* Bias: Vg = Vdd * R2/(R1+R2) ≈ 3.7V, sets Vgs > Vto
+
+.model 2N7000 NMOS(Level=1 Vto=2.1 Kp=80m W=1 L=1 Lambda=0.02)
+
+Vdd vdd 0 DC 15
+
+R1 vdd gate 1Meg
+R2 gate 0  330k
+
+M1 drain gate source 0 2N7000
+
+Rd vdd drain 3.3k
+Rs source 0   1k
+Cs source 0   100u
+
+Vin in 0 AC 0.1 SIN(0 0.1 1k)
+Cin  in    gate  1u
+Cout drain out   1u
+Rload out  0     10k
+
+.op
+.ac dec 20 10 1Meg
+.tran 5u 5m
+.end
+`,
+  },
+
+  {
+    name: "nmos-source-follower",
+    title: "NMOS Source Follower (Common-Drain)",
+    description: "N-channel MOSFET source follower: voltage gain ≈ 1, high input impedance, low output impedance — useful as a buffer.",
+    category: "mosfet",
+    parameters: [
+      { name: "Rs", description: "Source resistor — sets drain current and output impedance", defaultValue: "2.2k", unit: "Ω" },
+      { name: "R1", description: "Upper gate-bias resistor", defaultValue: "1Meg", unit: "Ω" },
+      { name: "R2", description: "Lower gate-bias resistor", defaultValue: "330k", unit: "Ω" },
+    ],
+    netlist: `NMOS Source Follower (Common-Drain)
+* Drain tied to Vdd; output taken from source node
+* Vout ≈ Vin - Vgs  →  Av ≈ 1 (slightly less)
+* High Zin, low Zout — use as impedance buffer
+
+.model 2N7000 NMOS(Level=1 Vto=2.1 Kp=80m W=1 L=1 Lambda=0.02)
+
+Vdd vdd 0 DC 15
+
+R1 vdd gate 1Meg
+R2 gate 0   330k
+
+* Drain to Vdd; output from source
+M1 vdd gate source 0 2N7000
+Rs source 0 2.2k
+
+Vin in 0 AC 1 SIN(0 1 1k)
+Cin  in     gate   1u
+Cout source out    1u
+Rload out   0      10k
+
+.op
+.ac dec 20 10 1Meg
+.tran 5u 5m
+.end
+`,
+  },
+
+  {
+    name: "cmos-inverter",
+    title: "CMOS Inverter",
+    description: "CMOS inverter with NMOS pull-down and PMOS pull-up. Shows DC transfer characteristic and transient switching.",
+    category: "mosfet",
+    parameters: [
+      { name: "Vdd", description: "Supply voltage", defaultValue: "5", unit: "V" },
+      { name: "Kn", description: "NMOS transconductance (Kp parameter)", defaultValue: "200u", unit: "A/V²" },
+      { name: "Kp", description: "PMOS transconductance (Kp parameter, W=2× for symmetry)", defaultValue: "100u", unit: "A/V²" },
+    ],
+    netlist: `CMOS Inverter
+* Logic threshold ≈ Vdd/2 when NMOS and PMOS strengths are matched
+* NMOS Kp=200u, W=10u; PMOS Kp=100u, W=20u → symmetric switching
+
+.model NMOS1 NMOS(Level=1 Vto=1.0 Kp=200u W=10u L=1u Lambda=0.02)
+.model PMOS1 PMOS(Level=1 Vto=-1.0 Kp=100u W=20u L=1u Lambda=0.02)
+
+Vdd vdd 0 DC 5
+Vin in 0 PULSE(0 5 1u 1n 1n 5u 10u)
+
+* PMOS: source=vdd, drain=out
+Mp out in vdd vdd PMOS1
+* NMOS: drain=out, source=0
+Mn out in 0 0 NMOS1
+
+Rprobe out 0 1Meg
+
+.tran 10n 25u
+.dc Vin 0 5 0.05
+.end
+`,
+  },
+
+  // ── Op-Amp — additional stages ───────────────────────────────
+
+  {
+    name: "voltage-follower",
+    title: "Op-Amp Voltage Follower",
+    description: "Unity-gain op-amp buffer. Vout = Vin. Infinite input impedance, near-zero output impedance.",
+    category: "opamp",
+    parameters: [],
+    netlist: `Op-Amp Voltage Follower
+* Av = 1 (unity gain); Vout = Vin
+* Ideal op-amp model: VCVS with direct output feedback
+
+Vs in 0 AC 1 SIN(0 1 1k)
+
+* Unity gain: output fed back to inverting input
+E1 out 0 in out 100k
+
+Rload out 0 10k
+
+.op
+.ac dec 20 1 1Meg
+.tran 5u 5m
+.end
+`,
+  },
+
+  {
+    name: "summing-amplifier",
+    title: "Inverting Summing Amplifier",
+    description: "Three-input inverting summing amplifier. Vout = -(Rf/Rin) × (Va + Vb + Vc) with equal input resistors.",
+    category: "opamp",
+    parameters: [
+      { name: "Rin", description: "Input resistors (Ra, Rb, Rc) — equal for unity-weight summing", defaultValue: "10k", unit: "Ω" },
+      { name: "Rf",  description: "Feedback resistor — Gain = -Rf/Rin", defaultValue: "30k", unit: "Ω" },
+    ],
+    netlist: `Inverting Summing Amplifier
+* Vout = -(Rf/Rin) * (Va + Vb + Vc)
+* Gain = -Rf/Rin = -3 with defaults (30k / 10k)
+
+Va a 0 AC 0.1 SIN(0 0.1 1k)
+Vb b 0 DC 0.2
+Vc c 0 SIN(0 0.05 3k)
+
+Ra a inv 10k
+Rb b inv 10k
+Rc c inv 10k
+Rf inv out 30k
+
+E1 out 0 0 inv 100k
+
+Rload out 0 10k
+
+.op
+.ac dec 20 1 10k
+.tran 5u 5m
+.end
+`,
+  },
+
+  {
+    name: "integrator",
+    title: "Op-Amp Integrator",
+    description: "Inverting integrator: Vout = -(1/R1·Cf) ∫Vin dt. Rf prevents DC saturation by limiting low-frequency gain to -Rf/R1.",
+    category: "opamp",
+    parameters: [
+      { name: "R1", description: "Input resistor — sets integration rate with Cf", defaultValue: "10k", unit: "Ω" },
+      { name: "Cf", description: "Feedback capacitor — integration capacitor", defaultValue: "100n", unit: "F" },
+      { name: "Rf", description: "Bleed resistor — limits DC gain to -Rf/R1", defaultValue: "100k", unit: "Ω" },
+    ],
+    netlist: `Op-Amp Integrator
+* Vout = -(1/(R1*Cf)) * integral(Vin) dt
+* Time constant τ = R1*Cf = 1ms with defaults
+* Rf limits DC gain to -Rf/R1 = -10 (prevents saturation)
+
+Vs in 0 SIN(0 1 1k) AC 1
+
+R1 in inv 10k
+Cf inv out 100n
+Rf inv out 100k
+
+E1 out 0 0 inv 100k
+
+Rload out 0 100k
+
+.op
+.ac dec 20 1 100k
+.tran 2u 5m
+.end
+`,
+  },
+
+  {
+    name: "differentiator",
+    title: "Op-Amp Differentiator",
+    description: "Practical inverting differentiator: Vout ≈ -R1·C1 × dVin/dt. Rs limits high-frequency gain to prevent oscillation.",
+    category: "opamp",
+    parameters: [
+      { name: "C1", description: "Input capacitor — sets differentiation rate with R1", defaultValue: "100n", unit: "F" },
+      { name: "R1", description: "Feedback resistor — gain = -R1/Rs at high frequencies", defaultValue: "10k", unit: "Ω" },
+      { name: "Rs", description: "Input series resistor — limits HF gain to -R1/Rs", defaultValue: "100", unit: "Ω" },
+    ],
+    netlist: `Op-Amp Differentiator
+* Vout = -R1*C1 * dVin/dt  (at frequencies where Rs << 1/ωC1)
+* Time constant τ = R1*C1 = 1ms with defaults
+* Rs limits HF gain to -R1/Rs = -100 to prevent oscillation
+
+Vs in 0 SIN(0 1 100) AC 1
+
+Rs in  n1  100
+C1 n1  inv 100n
+R1 inv out 10k
+
+E1 out 0 0 inv 100k
+
+Rload out 0 100k
+
+.op
+.ac dec 20 1 100k
+.tran 50u 20m
+.end
+`,
+  },
+
+  {
+    name: "sallen-key-lowpass",
+    title: "Sallen-Key Active Low-Pass Filter",
+    description: "2nd-order Butterworth low-pass filter (Q=0.707, -40 dB/decade). Non-inverting op-amp topology with gain K=1.586.",
+    category: "filter",
+    parameters: [
+      { name: "R1", description: "Filter resistor (R1 = R2 = R for equal-component design)", defaultValue: "1k", unit: "Ω" },
+      { name: "C1", description: "Filter capacitor (C1 = C2 = C for equal-component design)", defaultValue: "100n", unit: "F" },
+      { name: "Rf", description: "Gain-setting feedback resistor — K = 1+Rf/Rg = 1.586 → Q=0.707", defaultValue: "5.86k", unit: "Ω" },
+    ],
+    netlist: `Sallen-Key Active Low-Pass Filter (Butterworth)
+* 2nd order Butterworth: Q = 0.707, -40 dB/decade rolloff above fc
+* fc = 1/(2*pi*R*C) = 1592 Hz with R=1k, C=100n
+* Gain K = 1 + Rf/Rg = 1.586 sets Butterworth Q = 1/(3-K)
+
+Vs in 0 AC 1 PULSE(0 1 0 1n 1n 5m 10m)
+
+R1  in  n1  1k
+R2  n1  n2  1k
+C1  n1  out 100n
+C2  n2  0   100n
+
+* Non-inverting amplifier K = 1 + Rf/Rg = 1.586
+Rf  inv out 5.86k
+Rg  inv 0   10k
+E1  out 0   n2 inv 100k
+
+Rload out 0 100k
+
+.ac dec 30 10 100k
+.tran 5u 10m
 .end
 `,
   },
