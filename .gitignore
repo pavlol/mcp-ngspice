@@ -6,3 +6,4 @@ results/
 *.raw
 *.7z
 .claude/settings.local.json
+ARCHITECTURE.md
