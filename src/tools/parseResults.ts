@@ -1,5 +1,6 @@
 import { z } from "zod";
 import path from "path";
+import { fileURLToPath } from "url";
 import { parseRawFile, summarizePlot, RawPlot } from "../parsers/rawParser.js";
 
 export const ParseResultsSchema = z.object({
@@ -35,7 +36,8 @@ interface ParsedPlotOutput {
   ac?: Record<string, { magnitudeDb: number[]; phase: number[] }>;
 }
 
-const RESULTS_DIR = path.resolve("results");
+const PROJECT_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+const RESULTS_DIR = path.join(PROJECT_ROOT, "results");
 
 export async function parseResults(input: ParseResultsInput): Promise<ParseResultsOutput> {
   const rawPath = path.join(RESULTS_DIR, `${input.simulation_id}.raw`);

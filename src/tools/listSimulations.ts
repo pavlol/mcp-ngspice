@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { promises as fs } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // ──────────────────────────────────────────────────────────────
 // Schema
@@ -54,8 +55,9 @@ export interface ListSimulationsOutput {
 // Main function
 // ──────────────────────────────────────────────────────────────
 
-const CIRCUITS_DIR = path.resolve("circuits");
-const RESULTS_DIR  = path.resolve("results");
+const PROJECT_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+const CIRCUITS_DIR = path.join(PROJECT_ROOT, "circuits");
+const RESULTS_DIR  = path.join(PROJECT_ROOT, "results");
 
 export async function listSimulations(
   rawInput: ListSimulationsInput

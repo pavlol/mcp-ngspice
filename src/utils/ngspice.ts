@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 import { resolveLibPaths } from "./libResolver.js";
 
@@ -16,16 +17,19 @@ export interface SimulationResult {
 }
 
 const NGSPICE_BIN = process.env.NGSPICE_BIN ?? "C:\\Spice64\\bin\\ngspice_con.exe";
-const CIRCUITS_DIR = path.resolve("circuits");
-const RESULTS_DIR = path.resolve("results");
+// Resolve project root from this file's location (src/utils/ → two levels up)
+const PROJECT_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+const CIRCUITS_DIR = path.join(PROJECT_ROOT, "circuits");
+const RESULTS_DIR = path.join(PROJECT_ROOT, "results");
+
+// Create directories at module load so they exist before the first simulation
+await fs.mkdir(CIRCUITS_DIR, { recursive: true });
+await fs.mkdir(RESULTS_DIR, { recursive: true });
 
 export async function runNgspice(
   netlistContent: string,
   timeoutMs = 30_000
 ): Promise<SimulationResult> {
-  await fs.mkdir(CIRCUITS_DIR, { recursive: true });
-  await fs.mkdir(RESULTS_DIR, { recursive: true });
-
   const id = randomUUID();
   const netlistPath = path.join(CIRCUITS_DIR, `${id}.cir`);
   const logPath = path.join(RESULTS_DIR, `${id}.log`);

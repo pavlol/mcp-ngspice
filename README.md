@@ -28,7 +28,17 @@ npm run build
 
 ## Claude Desktop Configuration
 
+Config for Windows:
 Add the server to `%APPDATA%\Claude\claude_desktop_config.json`:
+If does not work, add it here:
+AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\
+OR search and use :
+%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\
+
+Modern Windows apps distributed via the Store (even when downloaded from a vendor's own website) are sometimes packaged as MSIX/UWP containers. This packaging system creates two separate AppData paths
+So the app writes to and reads from the Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\ path — the other one at AppData\Roaming\Claude\ exists but is never read by the running app.
+The UWP container intercepts filesystem calls. When Claude Desktop tries to access AppData\Roaming\Claude\, Windows silently redirects it to the LocalCache\Roaming\Claude\ path inside the package container. The file at AppData\Roaming\Claude\ is a ghost — it exists but the app never sees it.
+
 
 ```json
 {
@@ -40,6 +50,27 @@ Add the server to `%APPDATA%\Claude\claude_desktop_config.json`:
     }
   }
 }
+```
+## Create Folders
+in your mcp-ngspice create folders:
+circuits/
+results/
+
+Example:
+mkdir -p D:/Development_Soft/mcp_ngspice/circuits
+mkdir -p D:/Development_Soft/mcp_ngspice/results
+
+The server expects these folders to already exist — it writes netlists to circuits/ and simulation output to results/. Once the cwd is correctly set and the folders exist, the simulation will run.
+
+The real issue is that the cwd field in Claude Desktop's MCP config is not always passed to the Node.js process on Windows. The server starts from system32 regardless. This is a known Windows-specific behavior with how Claude Desktop spawns subprocesses.
+The most robust solution is to make the server resolve its own working directory from the script's location, instead of relying on cwd. Do this in Claude Code CLI:
+```
+cd D:/Development_Soft/mcp_ngspice
+claude
+
+Then tell Claude Code:
+
+"In src/utils/ngspice.ts, the server is trying to create circuits/ and results/ directories relative to process.cwd(), but on Windows Claude Desktop launches the process from system32 instead of the project root. Fix this by resolving the project root from import.meta.url instead of process.cwd(). The project root should be two levels up from src/utils/ngspice.ts — use fileURLToPath and path.resolve to get the absolute path, then use that as the base for all circuits/ and results/ directory operations. Also ensure both directories are created automatically on startup if they don't exist."
 ```
 
 Restart Claude Desktop after saving the config.

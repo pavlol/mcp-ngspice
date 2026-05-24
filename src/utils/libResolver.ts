@@ -1,7 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-export const MODELS_DIR = path.resolve("models");
+const PROJECT_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+export const MODELS_DIR = path.join(PROJECT_ROOT, "models");
 
 /**
  * Rewrite relative .lib / .include paths in a netlist to absolute paths
