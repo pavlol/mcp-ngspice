@@ -1,0 +1,8 @@
+node_modules/
+dist/
+circuits/
+results/
+*.log
+*.raw
+*.7z
+.claude/settings.local.json
